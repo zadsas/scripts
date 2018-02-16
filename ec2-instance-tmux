@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+if [ "$#" -lt 2 ]; then
+  echo
+  echo 'Usage: ec2-instance-tmux [ENV] [ROLE] [-t]'
+  echo 'ec2-instance-tmux dev cb-customer-service'
+  echo
+  exit 1
+fi
+ENV="$1"
+ROLE="$2"
+PROFILE='default'
+if [ ${ENV} = 'prod' ] || [ ${ENV} = 'beta' ]; then
+  PROFILE='prod'
+fi
+IPS=`aws ec2 describe-instances --filters "Name=tag:environment,Values=$ENV" "Name=tag:role,Values=$ROLE" --profile ${PROFILE} --output text | grep PRIVATEIPADDRESS | awk '{print $4}'`
+if [ -z "$IPS" ]; then
+  echo "No instances found"
+  exit 1
+fi
+NUM=`wc -l <<< "$IPS"`
+if [ $NUM -gt 4 ] || [ "$3" == "-t" ]; then
+  echo "Number of instances found: $NUM" 
+  for IP in $IPS; do echo $IP; done
+  exit 0
+fi
+function ssh_sudo {
+  echo "ssh -tt -o StrictHostKeyChecking=no $ENV-bastion ssh -tt -o StrictHostKeyChecking=no $1 sudo su"
+}
+set -- ${IPS}
+WINDOW_NAME=${ENV}-${ROLE}-$((`tmux list-windows | grep ${ENV}-${ROLE} | wc -l` + 1 ))
+WINDOW_ID=`tmux new-window -Pdn ${WINDOW_NAME} "$(ssh_sudo $1)"`
+SESSION_ID=${WINDOW_ID:0:1}
+case ${NUM} in
+  "2" )
+    tmux split-window -dt ${SESSION_ID}:${WINDOW_NAME} "$(ssh_sudo $2)"
+    ;;
+  "3" )
+    tmux split-window -dt ${SESSION_ID}:${WINDOW_NAME} "$(ssh_sudo $2)"
+    tmux split-window -dht ${SESSION_ID}:${WINDOW_NAME}.bottom "$(ssh_sudo $3)"
+    ;;
+  "4" )
+    tmux split-window -dt ${SESSION_ID}:${WINDOW_NAME} "$(ssh_sudo $2)"
+    tmux split-window -dht ${SESSION_ID}:${WINDOW_NAME}.top "$(ssh_sudo $3)"
+    tmux split-window -dht ${SESSION_ID}:${WINDOW_NAME}.bottom "$(ssh_sudo $4)"
+    ;;
+esac
+tmux set-window-option -t ${WINDOW_NAME} synchronize-pane on >/dev/null
+sleep 2
+#tmux send-keys -t ${WINDOW_NAME} $(pass ssh-aws 2>/dev/null) Enter 
+tmux select-window -t ${WINDOW_NAME}
+

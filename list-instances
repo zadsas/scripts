@@ -1,0 +1,25 @@
+#!/usr/bin/env python
+import boto3
+import sys
+import os
+
+role = sys.argv[1] # EC2 instance with tag 'role'
+environment = sys.argv[2] # EC2 instance with tag 'environment'
+if len(sys.argv) == 4:
+  profile = sys.argv[3] # Profile name in ~/.aws/credentials
+else:
+  profile = environment
+
+os.environ["AWS_PROFILE"] = profile
+
+ec2 = boto3.resource('ec2')
+
+instances = ec2.instances.filter(
+    Filters=[{'Name': 'tag:role', 'Values': ["*"+role+"*"]},
+             {'Name': 'tag:environment', 'Values': [environment]},
+             {'Name': 'instance-state-name', 'Values': ['running']}])
+
+for instance in instances:
+  role = [tag['Value'] for tag in instance.tags if tag['Key'] == 'role'][0]
+  print "%s\t%s\t%s\t[%s since %s]" % (instance.id, instance.private_ip_address, role, instance.state['Name'], instance.launch_time)
+
