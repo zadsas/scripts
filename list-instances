@@ -21,5 +21,5 @@ instances = ec2.instances.filter(
 
 for instance in instances:
   role = [tag['Value'] for tag in instance.tags if tag['Key'] == 'role'][0]
-  print "%s\t%s\t%s\t[%s since %s]" % (instance.id, instance.private_ip_address, role, instance.state['Name'], instance.launch_time)
+  print "%s\t%s\t%s\t%s\t[%s since %s]" % (instance.id, instance.private_ip_address, role, instance.instance_type, instance.state['Name'], instance.launch_time)
 
